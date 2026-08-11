@@ -46,22 +46,32 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
   const loadCustomerData = async () => {
     setLoadingHistory(true);
     try {
-      // 1. Query current loyalty progress using RPC search
-      const { data: searchData, error: searchError } = await supabase.rpc(
-        'search_customer_loyalty',
-        { p_name: customer.name, p_course: customer.course }
-      );
+      // 1. Query purchases directly by customer_id
+      const { data: purchasesData, error: purchError } = await supabase
+        .from('purchases')
+        .select('quantity')
+        .eq('customer_id', customer.id);
 
-      if (searchError) throw searchError;
+      if (purchError) throw purchError;
 
-      if (searchData && searchData.length > 0) {
-        const info = searchData[0];
-        setPurchasesThisCycle(info.purchases_this_cycle);
-        setRewardsAvailable(info.rewards_available);
-        setTotalPurchases(info.total_purchases);
-      }
+      // 2. Query rewards directly by customer_id
+      const { data: rewardsData, error: rewardsError } = await supabase
+        .from('rewards')
+        .select('quantity, status')
+        .eq('customer_id', customer.id);
 
-      // 2. Query history ordered by created_at descending
+      if (rewardsError) throw rewardsError;
+
+      const total = (purchasesData || []).reduce((sum, p) => sum + p.quantity, 0);
+      const available = (rewardsData || [])
+        .filter(r => r.status === 'available')
+        .reduce((sum, r) => sum + r.quantity, 0);
+
+      setTotalPurchases(total);
+      setPurchasesThisCycle(total % 10);
+      setRewardsAvailable(available);
+
+      // 3. Query history ordered by created_at descending
       const { data: historyData, error: historyError } = await supabase
         .from('loyalty_history')
         .select('*')
