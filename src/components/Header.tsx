@@ -63,18 +63,26 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {isAdmin ? (
           <>
             <button
               onClick={() => onToggleView(currentView === 'admin_dashboard' ? 'client' : 'admin_dashboard')}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full border border-chocolate text-chocolate hover:bg-chocolate hover:text-cream-light transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full border border-chocolate text-chocolate hover:bg-chocolate hover:text-cream-light transition-all cursor-pointer"
             >
-              {currentView === 'admin_dashboard' ? 'Ver como Cliente' : 'Painel Admin'}
+              {currentView === 'admin_dashboard' ? (
+                <>
+                  <span className="hidden sm:inline">Ver como </span>Cliente
+                </>
+              ) : (
+                <>
+                  Painel<span className="hidden sm:inline"> Admin</span>
+                </>
+              )}
             </button>
             <button
               onClick={onLogout}
-              className="flex items-center justify-center p-2 rounded-full hover:bg-cream-dark/50 text-chocolate transition-colors"
+              className="flex items-center justify-center p-2 rounded-full hover:bg-cream-dark/50 text-chocolate transition-colors cursor-pointer"
               title="Sair"
             >
               <LogOut className="w-5 h-5" />
@@ -83,10 +91,10 @@ export const Header: React.FC<HeaderProps> = ({
         ) : (
           <button
             onClick={() => onToggleView(currentView === 'admin_login' ? 'client' : 'admin_login')}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full text-chocolate hover:bg-cream-dark/50 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-full text-chocolate hover:bg-cream-dark/50 transition-colors cursor-pointer"
           >
-            <ShieldCheck className="w-4 h-4" />
-            Área do Admin
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span>Admin</span>
           </button>
         )}
       </div>

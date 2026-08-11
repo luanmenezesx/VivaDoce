@@ -29,6 +29,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
   const [customers, setCustomers] = useState<CustomerMapped[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState('');
   
   // Registration Form
   const [newName, setNewName] = useState('');
@@ -141,10 +142,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
     .sort((a, b) => b.purchasesThisCycle - a.purchasesThisCycle)
     .slice(0, 5);
 
-  // Search filter
+  // Search and course filter
   const filteredCustomers = customers.filter(c => {
-    const term = searchTerm.toLowerCase();
-    return c.name.toLowerCase().includes(term) || c.course.toLowerCase().includes(term);
+    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          c.course.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCourse = selectedCourseFilter === '' || c.course === selectedCourseFilter;
+    return matchesSearch && matchesCourse;
   });
 
   return (
@@ -202,7 +205,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* LEFT COLUMN: Registration & Clientes Próximos */}
-        <div className="space-y-8 lg:col-span-1">
+        <div className="space-y-8 lg:col-span-1 order-2 lg:order-1">
           
           {/* Section: Cadastrar Cliente */}
           <div className="bg-cream-light border border-cream-dark rounded-2xl p-6 shadow-sm space-y-4">
@@ -307,7 +310,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
         </div>
 
         {/* RIGHT COLUMN: Customers Listing & Search */}
-        <div className="lg:col-span-2 space-y-4 bg-cream-light border border-cream-dark rounded-2xl p-6 shadow-sm">
+        <div className="lg:col-span-2 order-1 lg:order-2 space-y-4 bg-cream-light border border-cream-dark rounded-2xl p-6 shadow-sm">
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-cream-medium pb-4">
             <h3 className="text-sm font-bold text-chocolate uppercase tracking-wider flex items-center gap-1.5">
@@ -315,20 +318,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
               Lista de Clientes
             </h3>
             
-            {/* Search Input */}
-            <div className="relative max-w-md w-full md:w-64">
-              <Search className="w-4 h-4 text-chocolate-pale/60 absolute left-3 top-3" />
-              <input
-                type="text"
-                placeholder="🔎 Buscar cliente..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-cream-medium/30 border border-cream-dark rounded-xl text-chocolate placeholder-chocolate-pale/50 focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all text-xs"
-              />
+            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+              {/* Filtro por Curso */}
+              <select
+                value={selectedCourseFilter}
+                onChange={(e) => setSelectedCourseFilter(e.target.value)}
+                className="px-3.5 py-2 bg-cream-medium/30 border border-cream-dark rounded-xl text-chocolate focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all text-xs cursor-pointer appearance-none pr-8 min-w-[160px]"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234A3728' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 12px center',
+                  backgroundSize: '14px'
+                }}
+              >
+                <option value="">Todos os cursos</option>
+                {COURSES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+
+              {/* Search Input */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-chocolate-pale/60 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="🔎 Buscar por nome..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-cream-medium/30 border border-cream-dark rounded-xl text-chocolate placeholder-chocolate-pale/50 focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all text-xs"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Loader or Table */}
+          {/* Loader or Customer List */}
           {loading ? (
             <div className="py-20 text-center text-xs text-chocolate-pale flex items-center justify-center gap-2">
               <div className="w-5 h-5 border-2 border-chocolate border-t-transparent rounded-full animate-spin" />
@@ -339,46 +364,81 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
               Nenhum cliente correspondente encontrado.
             </div>
           ) : (
-            <div className="overflow-x-auto no-scrollbar">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-cream-medium text-chocolate-pale font-bold text-[10px] uppercase tracking-wider">
-                    <th className="py-3 px-3">Cliente</th>
-                    <th className="py-3 px-3">Curso</th>
-                    <th className="py-3 px-3 text-center">Progresso</th>
-                    <th className="py-3 px-3 text-center">Prêmio</th>
-                    <th className="py-3 px-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-cream-medium">
-                  {filteredCustomers.map(c => (
-                    <tr 
-                      key={c.id}
-                      onClick={() => setSelectedCustomer(c)}
-                      className="hover:bg-cream-medium/20 cursor-pointer transition-colors"
-                    >
-                      <td className="py-3.5 px-3 font-bold text-chocolate">{c.name}</td>
-                      <td className="py-3.5 px-3 text-chocolate-pale">{c.course}</td>
-                      <td className="py-3.5 px-3 text-center font-extrabold text-chocolate">
-                        {c.purchasesThisCycle}/10
-                      </td>
-                      <td className="py-3.5 px-3 text-center">
-                        {c.rewardsAvailable > 0 ? (
-                          <span className="inline-flex items-center justify-center w-6 h-6 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 font-extrabold animate-pulse" title={`${c.rewardsAvailable} prêmio(s) disponível(is)`}>
-                            🎁
-                          </span>
-                        ) : (
-                          <span className="text-chocolate-pale/40">—</span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-3 text-right">
-                        <ChevronRight className="w-4 h-4 text-chocolate-pale/50 inline" />
-                      </td>
+            <>
+              {/* Mobile View: Touch-friendly List Cards */}
+              <div className="block md:hidden space-y-3">
+                {filteredCustomers.map(c => (
+                  <div
+                    key={c.id}
+                    onClick={() => setSelectedCustomer(c)}
+                    className="bg-cream-medium/20 border border-cream-dark/40 rounded-2xl p-4 flex items-center justify-between active:bg-cream-medium/40 transition-all select-none cursor-pointer"
+                  >
+                    <div className="space-y-1 pr-2">
+                      <p className="font-bold text-chocolate text-sm leading-snug">{c.name}</p>
+                      <p className="text-[10px] text-chocolate-pale leading-none">{c.course}</p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <p className="text-[8px] uppercase font-bold text-chocolate-pale/60 tracking-wider">Progresso</p>
+                        <p className="font-extrabold text-sm text-chocolate leading-tight">{c.purchasesThisCycle}/10</p>
+                      </div>
+                      
+                      {c.rewardsAvailable > 0 ? (
+                        <span className="w-7 h-7 bg-emerald-100 border border-emerald-300 rounded-full flex items-center justify-center text-sm animate-pulse shrink-0">
+                          🎁
+                        </span>
+                      ) : (
+                        <div className="w-7 h-7 flex items-center justify-center text-chocolate-pale/20 shrink-0">—</div>
+                      )}
+                      
+                      <ChevronRight className="w-4 h-4 text-chocolate-pale/40" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop View: Clean Table */}
+              <div className="hidden md:block overflow-x-auto no-scrollbar">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-cream-medium text-chocolate-pale font-bold text-[10px] uppercase tracking-wider">
+                      <th className="py-3 px-3">Cliente</th>
+                      <th className="py-3 px-3">Curso</th>
+                      <th className="py-3 px-3 text-center">Progresso</th>
+                      <th className="py-3 px-3 text-center">Prêmio</th>
+                      <th className="py-3 px-3"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-cream-medium">
+                    {filteredCustomers.map(c => (
+                      <tr 
+                        key={c.id}
+                        onClick={() => setSelectedCustomer(c)}
+                        className="hover:bg-cream-medium/20 cursor-pointer transition-colors"
+                      >
+                        <td className="py-3.5 px-3 font-bold text-chocolate">{c.name}</td>
+                        <td className="py-3.5 px-3 text-chocolate-pale">{c.course}</td>
+                        <td className="py-3.5 px-3 text-center font-extrabold text-chocolate">
+                          {c.purchasesThisCycle}/10
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          {c.rewardsAvailable > 0 ? (
+                            <span className="inline-flex items-center justify-center w-6 h-6 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 font-extrabold animate-pulse" title={`${c.rewardsAvailable} prêmio(s) disponível(is)`}>
+                              🎁
+                            </span>
+                          ) : (
+                            <span className="text-chocolate-pale/40">—</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-3 text-right">
+                          <ChevronRight className="w-4 h-4 text-chocolate-pale/50 inline" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
         </div>
