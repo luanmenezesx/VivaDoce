@@ -2,7 +2,7 @@
 -- Copie e cole este script no SQL Editor do seu projeto Supabase.
 
 -- Tabela de Clientes
-CREATE TABLE public.customers (
+CREATE TABLE IF NOT EXISTS public.customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     course TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE public.customers (
 );
 
 -- Tabela de Compras
-CREATE TABLE public.purchases (
+CREATE TABLE IF NOT EXISTS public.purchases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
     quantity INTEGER NOT NULL CHECK (quantity > 0),
@@ -20,7 +20,7 @@ CREATE TABLE public.purchases (
 );
 
 -- Tabela de Prêmios
-CREATE TABLE public.rewards (
+CREATE TABLE IF NOT EXISTS public.rewards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
     quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
@@ -31,7 +31,7 @@ CREATE TABLE public.rewards (
 );
 
 -- Tabela de Histórico de Fidelidade
-CREATE TABLE public.loyalty_history (
+CREATE TABLE IF NOT EXISTS public.loyalty_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
     type TEXT NOT NULL CHECK (type IN ('purchase', 'redeem')),
@@ -56,16 +56,16 @@ DECLARE
     v_available_needed INT;
 BEGIN
     -- 1. Calcular total de compras
-    SELECT COALESCE(SUM(quantity), 0)
+    SELECT COALESCE(SUM(p.quantity), 0)
     INTO v_total_purchases
-    FROM public.purchases
-    WHERE customer_id = p_customer_id;
+    FROM public.purchases p
+    WHERE p.customer_id = p_customer_id;
 
     -- 2. Calcular quantos prêmios já foram resgatados
-    SELECT COALESCE(SUM(quantity), 0)
+    SELECT COALESCE(SUM(r.quantity), 0)
     INTO v_redeemed_count
-    FROM public.rewards
-    WHERE customer_id = p_customer_id AND status = 'redeemed';
+    FROM public.rewards r
+    WHERE r.customer_id = p_customer_id AND r.status = 'redeemed';
 
     -- 3. Calcular quantos prêmios deveriam ter sido gerados no total (1 a cada 10 compras)
     v_should_total_rewards := floor(v_total_purchases / 10);
@@ -77,8 +77,8 @@ BEGIN
     END IF;
 
     -- 5. Atualizar tabela de prêmios:
-    DELETE FROM public.rewards
-    WHERE customer_id = p_customer_id AND status = 'available';
+    DELETE FROM public.rewards r
+    WHERE r.customer_id = p_customer_id AND r.status = 'available';
 
     IF v_available_needed > 0 THEN
         INSERT INTO public.rewards (customer_id, quantity, status, created_at)
@@ -110,6 +110,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_recalculate_loyalty ON public.purchases;
 CREATE TRIGGER trg_recalculate_loyalty
 AFTER INSERT OR UPDATE OR DELETE ON public.purchases
 FOR EACH ROW
@@ -133,6 +134,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_log_purchase_history ON public.purchases;
 CREATE TRIGGER trg_log_purchase_history
 AFTER INSERT ON public.purchases
 FOR EACH ROW
@@ -171,9 +173,9 @@ DECLARE
 BEGIN
     SELECT COUNT(*)
     INTO v_customer_count
-    FROM public.customers
-    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
-      AND LOWER(TRIM(course)) = LOWER(TRIM(p_course));
+    FROM public.customers c
+    WHERE LOWER(TRIM(c.name)) = LOWER(TRIM(p_name))
+      AND LOWER(TRIM(c.course)) = LOWER(TRIM(p_course));
 
     IF v_customer_count > 1 THEN
         RAISE EXCEPTION 'DUPLICATE_CUSTOMER';
@@ -181,34 +183,34 @@ BEGIN
         RETURN;
     END IF;
 
-    SELECT id, name, course
+    SELECT c.id, c.name, c.course
     INTO v_cust_id, v_cust_name, v_cust_course
-    FROM public.customers
-    WHERE LOWER(TRIM(name)) = LOWER(TRIM(p_name))
-      AND LOWER(TRIM(course)) = LOWER(TRIM(p_course));
+    FROM public.customers c
+    WHERE LOWER(TRIM(c.name)) = LOWER(TRIM(p_name))
+      AND LOWER(TRIM(c.course)) = LOWER(TRIM(p_course));
 
-    SELECT COALESCE(SUM(quantity), 0)
+    SELECT COALESCE(SUM(pur.quantity), 0)
     INTO v_total_purchases
-    FROM public.purchases
-    WHERE customer_id = v_cust_id;
+    FROM public.purchases pur
+    WHERE pur.customer_id = v_cust_id;
 
-    SELECT COALESCE(SUM(quantity), 0)
+    SELECT COALESCE(SUM(rew.quantity), 0)
     INTO v_rewards_available
-    FROM public.rewards
-    WHERE customer_id = v_cust_id AND status = 'available';
+    FROM public.rewards rew
+    WHERE rew.customer_id = v_cust_id AND rew.status = 'available';
 
     v_purchases_this_cycle := v_total_purchases % 10;
     v_missing := 10 - v_purchases_this_cycle;
 
     RETURN QUERY
     SELECT 
-        v_cust_id,
-        v_cust_name,
-        v_cust_course,
-        v_purchases_this_cycle,
-        v_missing,
-        v_rewards_available,
-        v_total_purchases;
+        v_cust_id AS customer_id,
+        v_cust_name AS customer_name,
+        v_cust_course AS customer_course,
+        v_purchases_this_cycle AS purchases_this_cycle,
+        v_missing AS missing_for_next_reward,
+        v_rewards_available AS rewards_available,
+        v_total_purchases AS total_purchases;
 END;
 $$;
 
@@ -229,10 +231,10 @@ BEGIN
         RAISE EXCEPTION 'UNAUTHORIZED';
     END IF;
 
-    SELECT id, quantity
+    SELECT r.id, r.quantity
     INTO v_reward_id, v_reward_qty
-    FROM public.rewards
-    WHERE customer_id = p_customer_id AND status = 'available'
+    FROM public.rewards r
+    WHERE r.customer_id = p_customer_id AND r.status = 'available'
     LIMIT 1;
 
     IF v_reward_id IS NULL THEN
@@ -240,15 +242,15 @@ BEGIN
     END IF;
 
     IF v_reward_qty = 1 THEN
-        UPDATE public.rewards
+        UPDATE public.rewards r
         SET status = 'redeemed',
             redeemed_at = now(),
             redeemed_by = p_redeemed_by
-        WHERE id = v_reward_id;
+        WHERE r.id = v_reward_id;
     ELSE
-        UPDATE public.rewards
-        SET quantity = quantity - 1
-        WHERE id = v_reward_id;
+        UPDATE public.rewards r
+        SET quantity = r.quantity - 1
+        WHERE r.id = v_reward_id;
 
         INSERT INTO public.rewards (customer_id, quantity, status, created_at, redeemed_at, redeemed_by)
         VALUES (p_customer_id, 1, 'redeemed', now(), now(), p_redeemed_by);
@@ -266,6 +268,11 @@ ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rewards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.loyalty_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS admin_all_customers ON public.customers;
+DROP POLICY IF EXISTS admin_all_purchases ON public.purchases;
+DROP POLICY IF EXISTS admin_all_rewards ON public.rewards;
+DROP POLICY IF EXISTS admin_all_history ON public.loyalty_history;
 
 CREATE POLICY admin_all_customers ON public.customers FOR ALL TO authenticated USING (true);
 CREATE POLICY admin_all_purchases ON public.purchases FOR ALL TO authenticated USING (true);

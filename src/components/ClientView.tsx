@@ -18,7 +18,7 @@ export const ClientView: React.FC = () => {
   const [course, setCourse] = useState('');
   const [loading, setLoading] = useState(false);
   const [cardData, setCardData] = useState<LoyaltyCardData | null>(null);
-  const [searchError, setSearchError] = useState<'duplicate' | 'not_found' | 'generic' | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,16 +39,16 @@ export const ClientView: React.FC = () => {
           setSearchError('duplicate');
         } else {
           console.error(error);
-          setSearchError('generic');
+          setSearchError(error.message || 'Erro desconhecido');
         }
       } else if (data && data.length > 0) {
         setCardData(data[0] as LoyaltyCardData);
       } else {
         setSearchError('not_found');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setSearchError('generic');
+      setSearchError(err.message || 'Erro de conexão');
     } finally {
       setLoading(false);
     }
@@ -137,10 +137,13 @@ export const ClientView: React.FC = () => {
               </div>
             )}
 
-            {searchError === 'generic' && (
+            {searchError && searchError !== 'not_found' && searchError !== 'duplicate' && (
               <div className="bg-red-50 text-red-800 p-4 rounded-xl border border-red-200 text-xs flex gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <p className="mt-0.5">Erro ao realizar a busca. Por favor, tente novamente.</p>
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Erro na busca (Supabase)</p>
+                  <p className="mt-0.5 opacity-90">{searchError}</p>
+                </div>
               </div>
             )}
 
