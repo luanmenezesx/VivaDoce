@@ -269,7 +269,7 @@ export const ClientView: React.FC = () => {
               /* Missing message */
               <div className="bg-cream-medium/20 border border-cream-dark/40 rounded-xl p-4 text-center">
                 <p className="text-sm font-bold text-chocolate">
-                  Faltam apenas <span className="text-accent-gold font-extrabold text-base">{cardData.missing_for_next_reward}</span> Palha{cardData.missing_for_next_reward > 1 ? 's' : ''} para você ganhar uma grátis! 🎁
+                  Faltam apenas <span className="text-accent-gold font-extrabold text-base">{cardData.missing_for_next_reward}</span> Palha{cardData.missing_for_next_reward > 1 ? 's' : ''} para você ganhar uma palha grátis! 🎁
                 </p>
               </div>
             )}
