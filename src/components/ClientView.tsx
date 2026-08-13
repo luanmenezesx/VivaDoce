@@ -54,12 +54,6 @@ export const ClientView: React.FC = () => {
     }
   };
 
-  const handleClear = () => {
-    setName('');
-    setCourse('');
-    setCardData(null);
-    setSearchError(null);
-  };
 
   // Helper to render the 10 chocolate card grid
   const renderChocolateGrid = (completed: number) => {
@@ -275,7 +269,7 @@ export const ClientView: React.FC = () => {
               /* Missing message */
               <div className="bg-cream-medium/20 border border-cream-dark/40 rounded-xl p-4 text-center">
                 <p className="text-sm font-bold text-chocolate">
-                  Faltam apenas <span className="text-accent-gold font-extrabold text-base">{cardData.missing_for_next_reward}</span> Palha{cardData.missing_for_next_reward > 1 ? 'as' : ''} para você ganhar uma grátis! 🎁
+                  Faltam apenas <span className="text-accent-gold font-extrabold text-base">{cardData.missing_for_next_reward}</span> Palha{cardData.missing_for_next_reward > 1 ? 's' : ''} para você ganhar uma grátis! 🎁
                 </p>
               </div>
             )}
@@ -293,14 +287,6 @@ export const ClientView: React.FC = () => {
                 </p>
               </div>
             </div>
-
-            {/* Action buttons */}
-            <button
-              onClick={handleClear}
-              className="w-full py-3 border-2 border-dashed border-chocolate-pale/50 text-chocolate hover:bg-cream-medium/40 font-bold rounded-xl active:scale-[0.98] transition-all text-sm cursor-pointer"
-            >
-              Consultar outro cartão
-            </button>
           </div>
         )}
       </div>
