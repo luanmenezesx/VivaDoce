@@ -235,6 +235,49 @@ BEGIN
 END;
 $$;
 
+-- RPC Pública: Busca o histórico de compras de um cliente (Somente Leitura)
+CREATE OR REPLACE FUNCTION public.get_customer_history(
+    p_name TEXT,
+    p_course TEXT
+)
+RETURNS TABLE (
+    id UUID,
+    quantity INT,
+    description TEXT,
+    created_at TIMESTAMPTZ,
+    type TEXT
+) 
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_cust_id UUID;
+BEGIN
+    SELECT c.id
+    INTO v_cust_id
+    FROM public.customers c
+    WHERE LOWER(TRIM(c.name)) = LOWER(TRIM(p_name))
+      AND LOWER(TRIM(c.course)) = LOWER(TRIM(p_course));
+
+    IF v_cust_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY
+    SELECT 
+        h.id,
+        h.quantity,
+        h.description,
+        h.created_at,
+        h.type
+    FROM public.loyalty_history h
+    WHERE h.customer_id = v_cust_id
+    ORDER BY h.created_at DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_customer_history(TEXT, TEXT) TO anon, authenticated;
+
 -- RPC Privada: Resgate de prêmio pelo Administrador
 CREATE OR REPLACE FUNCTION public.redeem_customer_reward(
     p_customer_id UUID,
@@ -294,8 +337,10 @@ DROP POLICY IF EXISTS admin_all_customers ON public.customers;
 DROP POLICY IF EXISTS admin_all_purchases ON public.purchases;
 DROP POLICY IF EXISTS admin_all_rewards ON public.rewards;
 DROP POLICY IF EXISTS admin_all_history ON public.loyalty_history;
+DROP POLICY IF EXISTS anon_read_history ON public.loyalty_history;
 
 CREATE POLICY admin_all_customers ON public.customers FOR ALL TO authenticated USING (true);
 CREATE POLICY admin_all_purchases ON public.purchases FOR ALL TO authenticated USING (true);
 CREATE POLICY admin_all_rewards ON public.rewards FOR ALL TO authenticated USING (true);
 CREATE POLICY admin_all_history ON public.loyalty_history FOR ALL TO authenticated USING (true);
+CREATE POLICY anon_read_history ON public.loyalty_history FOR SELECT TO anon USING (true);

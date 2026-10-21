@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { COURSES } from '../utils/courses';
-import { Search, Gift, Award, Sparkles, AlertCircle, Calendar } from 'lucide-react';
+import { Search, Gift, Award, Sparkles, AlertCircle, Calendar, Clock, ChevronLeft } from 'lucide-react';
 
 interface LoyaltyCardData {
   customer_id: string;
@@ -13,12 +13,56 @@ interface LoyaltyCardData {
   total_purchases: number;
 }
 
+interface CustomerPurchase {
+  id: string;
+  quantity: number;
+  description: string;
+  created_at: string;
+}
+
 export const ClientView: React.FC = () => {
   const [name, setName] = useState('');
   const [course, setCourse] = useState('');
   const [loading, setLoading] = useState(false);
   const [cardData, setCardData] = useState<LoyaltyCardData | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  const [purchasesList, setPurchasesList] = useState<CustomerPurchase[]>([]);
+  const [loadingPurchases, setLoadingPurchases] = useState(false);
+
+  const loadPurchases = async (custName: string, custCourse: string, custId: string) => {
+    setLoadingPurchases(true);
+    setPurchasesList([]);
+    try {
+      // 1. Tenta buscar pela função RPC segura (SECURITY DEFINER)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_customer_history', {
+        p_name: custName,
+        p_course: custCourse,
+      });
+
+      if (!rpcError && rpcData && rpcData.length > 0) {
+        const purchases = rpcData.filter((item: any) => item.type === 'purchase');
+        setPurchasesList(purchases);
+        return;
+      }
+
+      // 2. Fallback: consulta direta à tabela loyalty_history
+      const { data: directData, error: directError } = await supabase
+        .from('loyalty_history')
+        .select('id, quantity, description, created_at, type')
+        .eq('customer_id', custId)
+        .eq('type', 'purchase')
+        .order('created_at', { ascending: false });
+
+      if (!directError && directData) {
+        setPurchasesList(directData);
+      }
+    } catch (err) {
+      console.error('Error fetching purchases history for client:', err);
+    } finally {
+      setLoadingPurchases(false);
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +71,7 @@ export const ClientView: React.FC = () => {
     setLoading(true);
     setSearchError(null);
     setCardData(null);
+    setPurchasesList([]);
 
     try {
       const { data, error } = await supabase.rpc('search_customer_loyalty', {
@@ -42,7 +87,9 @@ export const ClientView: React.FC = () => {
           setSearchError(error.message || 'Erro desconhecido');
         }
       } else if (data && data.length > 0) {
-        setCardData(data[0] as LoyaltyCardData);
+        const found = data[0] as LoyaltyCardData;
+        setCardData(found);
+        loadPurchases(name.trim(), course, found.customer_id);
       } else {
         setSearchError('not_found');
       }
@@ -286,6 +333,69 @@ export const ClientView: React.FC = () => {
                   {cardData.rewards_available}
                 </p>
               </div>
+            </div>
+
+            {/* Histórico de Compras (Somente Leitura) */}
+            <div className="border-t border-cream-medium pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-chocolate uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-accent-gold" />
+                  Compras registradas
+                </h3>
+                <span className="text-[10px] text-chocolate-pale font-medium bg-cream-medium/50 px-2 py-0.5 rounded-full border border-cream-dark/40">
+                  Somente leitura
+                </span>
+              </div>
+
+              {loadingPurchases ? (
+                <div className="text-center py-6 text-xs text-chocolate-pale flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-chocolate border-t-transparent rounded-full animate-spin" />
+                  Carregando compras...
+                </div>
+              ) : purchasesList.length === 0 ? (
+                <div className="p-4 bg-cream-medium/20 border border-dashed border-cream-dark/40 rounded-xl text-center text-xs text-chocolate-pale">
+                  Nenhuma compra encontrada no histórico.
+                </div>
+              ) : (
+                <div className="divide-y divide-cream-medium/70 border border-cream-dark/40 rounded-2xl bg-cream-medium/10 overflow-hidden max-h-[220px] overflow-y-auto no-scrollbar">
+                  {purchasesList.map((item) => (
+                    <div key={item.id} className="p-3 flex items-center justify-between text-xs hover:bg-cream-medium/20 transition-colors">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-lg">🍫</span>
+                        <div>
+                          <p className="font-bold text-chocolate leading-tight">
+                            +{item.quantity} {item.quantity === 1 ? 'Palha Italiana' : 'Palhas Italianas'}
+                          </p>
+                          <p className="text-[10px] text-chocolate-pale flex items-center gap-1 mt-0.5 font-medium">
+                            <Calendar className="w-2.5 h-2.5" />
+                            {new Date(item.created_at).toLocaleDateString('pt-BR')} às {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-black text-chocolate bg-cream-light px-2.5 py-1 rounded-lg border border-cream-dark/40 shadow-2xs">
+                        +{item.quantity}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Botão para Nova Consulta */}
+            <div className="pt-2 border-t border-cream-medium">
+              <button
+                type="button"
+                onClick={() => {
+                  setCardData(null);
+                  setPurchasesList([]);
+                  setName('');
+                  setCourse('');
+                }}
+                className="w-full py-2.5 bg-cream-medium/70 hover:bg-cream-dark/40 text-chocolate text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Consultar outro cartão
+              </button>
             </div>
           </div>
         )}
