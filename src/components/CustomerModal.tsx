@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { X, Plus, Minus, Gift, Trash2, Calendar, User, Award, Clock } from 'lucide-react';
+import { X, Plus, Minus, Gift, Trash2, Calendar, User, Award, Clock, Pencil, Check } from 'lucide-react';
+
+const formatForDateTimeLocal = (isoString?: string) => {
+  const d = isoString ? new Date(isoString) : new Date();
+  if (isNaN(d.getTime())) return '';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const parseDateTimeLocalToIso = (localString: string) => {
+  if (!localString) return new Date().toISOString();
+  const d = new Date(localString);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+};
 
 interface Customer {
   id: string;
@@ -37,7 +54,12 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
   const [totalPurchases, setTotalPurchases] = useState(0);
   
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
+  const [purchaseDate, setPurchaseDate] = useState<string>(() => formatForDateTimeLocal());
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const [editingDateValue, setEditingDateValue] = useState<string>('');
+  const [editingQuantityValue, setEditingQuantityValue] = useState<number>(1);
   
   const [loadingAction, setLoadingAction] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -90,6 +112,8 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
 
   useEffect(() => {
     loadCustomerData();
+    setPurchaseDate(formatForDateTimeLocal());
+    setEditingHistoryId(null);
   }, [customer.id]);
 
   const handleIncrement = () => setPurchaseQuantity(prev => prev + 1);
@@ -98,20 +122,70 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
   const handleAddPurchase = async () => {
     setLoadingAction(true);
     try {
-      const { error } = await supabase.from('purchases').insert({
+      const payload: any = {
         customer_id: customer.id,
         quantity: purchaseQuantity,
         created_by: adminEmail,
-      });
+      };
+
+      if (purchaseDate) {
+        payload.created_at = parseDateTimeLocalToIso(purchaseDate);
+      }
+
+      const { error } = await supabase.from('purchases').insert(payload);
 
       if (error) throw error;
 
       setPurchaseQuantity(1);
+      setPurchaseDate(formatForDateTimeLocal());
       await loadCustomerData();
       onDataChange();
     } catch (err) {
       console.error('Error adding purchase:', err);
       alert('Erro ao registrar a compra. Verifique sua conexão.');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleSaveEditPurchase = async (item: HistoryItem) => {
+    if (!item.purchase_id || !editingDateValue || editingQuantityValue < 1) return;
+
+    setLoadingAction(true);
+    try {
+      const newIso = parseDateTimeLocalToIso(editingDateValue);
+      const newQuantity = Math.max(1, Math.floor(editingQuantityValue));
+      const newDesc = `+${newQuantity} Palha${newQuantity > 1 ? 'as' : ''} Italiana${newQuantity > 1 ? 'as' : ''}`;
+
+      // 1. Update purchase quantity and created_at
+      const { error: purchError } = await supabase
+        .from('purchases')
+        .update({ 
+          quantity: newQuantity,
+          created_at: newIso 
+        })
+        .eq('id', item.purchase_id);
+
+      if (purchError) throw purchError;
+
+      // 2. Update loyalty_history quantity, description, and created_at
+      const { error: histError } = await supabase
+        .from('loyalty_history')
+        .update({ 
+          quantity: newQuantity,
+          description: newDesc,
+          created_at: newIso 
+        })
+        .eq('purchase_id', item.purchase_id);
+
+      if (histError) console.warn('History update notice:', histError);
+
+      setEditingHistoryId(null);
+      await loadCustomerData();
+      onDataChange();
+    } catch (err) {
+      console.error('Error updating purchase:', err);
+      alert('Erro ao alterar a compra. Tente novamente.');
     } finally {
       setLoadingAction(false);
     }
@@ -247,7 +321,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* Box 1: Add Purchase */}
-            <div className="bg-cream-medium/20 border border-cream-dark/40 rounded-2xl p-4 flex flex-col justify-between space-y-4">
+            <div className="bg-cream-medium/20 border border-cream-dark/40 rounded-2xl p-4 flex flex-col justify-between space-y-3">
               <h4 className="text-xs font-bold text-chocolate uppercase tracking-wider">
                 Registrar compras
               </h4>
@@ -273,10 +347,24 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
                 </button>
               </div>
 
+              {/* Data da compra */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-1 text-[10px] font-bold text-chocolate uppercase tracking-wider">
+                  <Calendar className="w-3 h-3 text-chocolate-pale" />
+                  Data da compra
+                </label>
+                <input
+                  type="datetime-local"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-cream-light border border-cream-dark/40 rounded-xl text-chocolate text-xs focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all"
+                />
+              </div>
+
               <button
                 onClick={handleAddPurchase}
                 disabled={loadingAction}
-                className="w-full py-2.5 bg-chocolate hover:bg-chocolate-light text-cream-light text-xs font-bold rounded-xl active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2 bg-chocolate hover:bg-chocolate-light text-cream-light text-xs font-bold rounded-xl active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 Confirmar compra
@@ -332,32 +420,128 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
               <div className="border border-cream-dark/40 rounded-2xl overflow-hidden bg-cream-light divide-y divide-cream-medium max-h-[220px] overflow-y-auto no-scrollbar">
                 {history.map((item) => (
                   <div key={item.id} className="p-3 text-xs flex items-center justify-between hover:bg-cream-medium/10 transition-colors">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 font-bold">
-                        <span className={item.type === 'redeem' ? 'text-emerald-700 font-extrabold' : 'text-chocolate'}>
-                          {item.description}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-chocolate-pale/80 font-medium">
-                        <span className="flex items-center gap-0.5">
-                          <Calendar className="w-2.5 h-2.5" />
-                          {new Date(item.created_at).toLocaleDateString('pt-BR')} {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <span>•</span>
-                        <span>Por: {item.created_by.split('@')[0]}</span>
-                      </div>
-                    </div>
+                    {editingHistoryId === item.id ? (
+                      <div className="w-full space-y-3 py-1 bg-cream-medium/40 p-3 rounded-xl border border-cream-dark/60">
+                        <div className="flex items-center justify-between text-xs border-b border-cream-medium pb-2">
+                          <span className="font-bold text-chocolate flex items-center gap-1.5">
+                            <Pencil className="w-3.5 h-3.5 text-accent-gold" />
+                            Editar compra
+                          </span>
+                          <span className="text-[10px] text-chocolate-pale font-medium bg-cream-light px-2 py-0.5 rounded-md border border-cream-dark/40">
+                            Atual: {item.description}
+                          </span>
+                        </div>
 
-                    {/* Action buttons on history (e.g. delete purchase) */}
-                    {item.type === 'purchase' && item.purchase_id && (
-                      <button
-                        onClick={() => handleDeletePurchase(item.purchase_id!, item.description)}
-                        disabled={loadingAction}
-                        className="p-1.5 rounded-lg text-chocolate-pale/60 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
-                        title="Excluir compra"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Quantidade de palhas com stepper */}
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-bold text-chocolate uppercase tracking-wider">
+                              Quantidade de palhas
+                            </label>
+                            <div className="flex items-center justify-between bg-cream-light border border-cream-dark/60 py-1 px-2 rounded-xl max-w-[130px]">
+                              <button
+                                type="button"
+                                onClick={() => setEditingQuantityValue(prev => Math.max(1, prev - 1))}
+                                disabled={editingQuantityValue <= 1 || loadingAction}
+                                className="p-1 rounded-full text-chocolate hover:bg-cream-medium active:scale-90 transition-all disabled:opacity-30 cursor-pointer"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="font-extrabold text-sm text-chocolate text-center">
+                                {editingQuantityValue}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setEditingQuantityValue(prev => prev + 1)}
+                                disabled={loadingAction}
+                                className="p-1 rounded-full text-chocolate hover:bg-cream-medium active:scale-90 transition-all cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Data e hora da compra */}
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-bold text-chocolate uppercase tracking-wider flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-chocolate-pale" />
+                              Data e hora
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={editingDateValue}
+                              onChange={(e) => setEditingDateValue(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-cream-light border border-cream-dark/60 rounded-xl text-chocolate text-xs focus:outline-none focus:ring-1 focus:ring-chocolate"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Botões Salvar e Cancelar */}
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-cream-medium/60">
+                          <button
+                            type="button"
+                            onClick={() => setEditingHistoryId(null)}
+                            disabled={loadingAction}
+                            className="px-2.5 py-1 bg-cream-medium hover:bg-cream-dark/40 text-chocolate text-xs font-semibold rounded-xl cursor-pointer transition-all flex items-center gap-1"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveEditPurchase(item)}
+                            disabled={loadingAction || editingQuantityValue < 1 || !editingDateValue}
+                            className="px-3 py-1 bg-chocolate hover:bg-chocolate-light text-cream-light text-xs font-bold rounded-xl cursor-pointer transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            {loadingAction ? 'Salvando...' : 'Salvar'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <span className={item.type === 'redeem' ? 'text-emerald-700 font-extrabold' : 'text-chocolate'}>
+                              {item.description}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-chocolate-pale/80 font-medium">
+                            <span className="flex items-center gap-0.5">
+                              <Calendar className="w-2.5 h-2.5" />
+                              {new Date(item.created_at).toLocaleDateString('pt-BR')} {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <span>•</span>
+                            <span>Por: {item.created_by.split('@')[0]}</span>
+                          </div>
+                        </div>
+
+                        {/* Action buttons on history (e.g. edit purchase or delete purchase) */}
+                        {item.type === 'purchase' && item.purchase_id && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingHistoryId(item.id);
+                                setEditingDateValue(formatForDateTimeLocal(item.created_at));
+                                setEditingQuantityValue(item.quantity);
+                              }}
+                              disabled={loadingAction}
+                              className="p-1.5 rounded-lg text-chocolate-pale/60 hover:text-chocolate hover:bg-cream-medium/40 transition-colors cursor-pointer"
+                              title="Alterar compra (quantidade e data)"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePurchase(item.purchase_id!, item.description)}
+                              disabled={loadingAction}
+                              className="p-1.5 rounded-lg text-chocolate-pale/60 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Excluir compra"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ))}

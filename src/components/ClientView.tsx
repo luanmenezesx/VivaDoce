@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { COURSES } from '../utils/courses';
-import { Search, Gift, Award, Sparkles, AlertCircle } from 'lucide-react';
+import { Search, Gift, Award, Sparkles, AlertCircle, Calendar } from 'lucide-react';
 
 interface LoyaltyCardData {
   customer_id: string;
@@ -291,8 +291,14 @@ export const ClientView: React.FC = () => {
         )}
       </div>
 
+      {/* Mensagem aparente de contabilização */}
+      <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-cream-light border border-cream-dark/80 rounded-full shadow-xs text-xs font-bold text-chocolate">
+        <Calendar className="w-4 h-4 text-accent-gold shrink-0" />
+        <span>Contabilizando desde o dia 12 de agosto</span>
+      </div>
+
       {/* Footer Info */}
-      <div className="mt-8 text-center text-[10px] text-chocolate-pale flex flex-col gap-1">
+      <div className="mt-5 text-center text-[10px] text-chocolate-pale flex flex-col gap-1">
         <span>Viva Doce © {new Date().getFullYear()}</span>
         <span className="opacity-70">Somente o administrador pode registrar compras e prêmios.</span>
       </div>

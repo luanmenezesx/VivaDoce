@@ -140,6 +140,27 @@ AFTER INSERT ON public.purchases
 FOR EACH ROW
 EXECUTE FUNCTION public.log_purchase_history();
 
+-- Trigger: Sincroniza alteração de compra (data e quantidade) com o histórico
+CREATE OR REPLACE FUNCTION public.sync_purchase_update()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.created_at != OLD.created_at OR NEW.quantity != OLD.quantity THEN
+        UPDATE public.loyalty_history
+        SET created_at = NEW.created_at,
+            quantity = NEW.quantity,
+            description = '+' || NEW.quantity || ' Palha' || CASE WHEN NEW.quantity > 1 THEN 'as' ELSE '' END || ' Italiana' || CASE WHEN NEW.quantity > 1 THEN 'as' ELSE '' END
+        WHERE purchase_id = NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_purchase_update ON public.purchases;
+CREATE TRIGGER trg_sync_purchase_update
+AFTER UPDATE ON public.purchases
+FOR EACH ROW
+EXECUTE FUNCTION public.sync_purchase_update();
+
 -- =========================================================================
 -- FUNÇÕES SQL / RPC PARA O FRONTEND
 -- =========================================================================

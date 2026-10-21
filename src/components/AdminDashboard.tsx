@@ -30,6 +30,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourseFilter, setSelectedCourseFilter] = useState('');
+  const [selectedPalhasFilter, setSelectedPalhasFilter] = useState('');
   
   // Registration Form
   const [newName, setNewName] = useState('');
@@ -142,13 +143,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
     .sort((a, b) => b.purchasesThisCycle - a.purchasesThisCycle)
     .slice(0, 5);
 
-  // Search and course filter
-  const filteredCustomers = customers.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          c.course.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCourse = selectedCourseFilter === '' || c.course === selectedCourseFilter;
-    return matchesSearch && matchesCourse;
-  });
+  // Search, course filter, palhas filter, and descending sort by purchase quantity
+  const filteredCustomers = customers
+    .filter(c => {
+      const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            c.course.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCourse = selectedCourseFilter === '' || c.course === selectedCourseFilter;
+      
+      const matchesPalhas = selectedPalhasFilter === '' || (
+        selectedPalhasFilter === '10'
+          ? (c.purchasesThisCycle === 10 || (c.purchasesThisCycle === 0 && c.totalPurchases > 0 && c.totalPurchases % 10 === 0))
+          : c.purchasesThisCycle === Number(selectedPalhasFilter)
+      );
+
+      return matchesSearch && matchesCourse && matchesPalhas;
+    })
+    .sort((a, b) => {
+      // Sort by total purchases descending
+      if (b.totalPurchases !== a.totalPurchases) {
+        return b.totalPurchases - a.totalPurchases;
+      }
+      // If total purchases are equal, sort by cycle progress descending
+      if (b.purchasesThisCycle !== a.purchasesThisCycle) {
+        return b.purchasesThisCycle - a.purchasesThisCycle;
+      }
+      // Secondary sort: alphabetical by name
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-8">
@@ -310,45 +331,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
         </div>
 
         {/* RIGHT COLUMN: Customers Listing & Search */}
-        <div className="lg:col-span-2 order-1 lg:order-2 space-y-4 bg-cream-light border border-cream-dark rounded-2xl p-6 shadow-sm">
+        <div className="lg:col-span-2 order-1 lg:order-2 space-y-4 bg-cream-light border border-cream-dark rounded-2xl p-6 shadow-sm overflow-hidden">
           
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-cream-medium pb-4">
-            <h3 className="text-sm font-bold text-chocolate uppercase tracking-wider flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-chocolate" />
-              Lista de Clientes
-            </h3>
+          <div className="border-b border-cream-medium pb-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-chocolate uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-chocolate" />
+                Lista de Clientes
+              </h3>
+              <span className="text-[11px] text-chocolate-pale font-medium bg-cream-medium/50 px-2.5 py-0.5 rounded-full border border-cream-dark/50">
+                {filteredCustomers.length} {filteredCustomers.length === 1 ? 'cliente' : 'clientes'}
+              </span>
+            </div>
             
-            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-              {/* Filtro por Curso */}
-              <select
-                value={selectedCourseFilter}
-                onChange={(e) => setSelectedCourseFilter(e.target.value)}
-                className="px-3.5 py-2 bg-cream-medium/30 border border-cream-dark rounded-xl text-chocolate focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all text-xs cursor-pointer appearance-none pr-8 min-w-[160px]"
-                style={{
-                  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234A3728' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 12px center',
-                  backgroundSize: '14px'
-                }}
-              >
-                <option value="">Todos os cursos</option>
-                {COURSES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-
-              {/* Search Input */}
-              <div className="relative w-full sm:w-64">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 w-full">
+              {/* Search Input - 6 cols on lg */}
+              <div className="relative sm:col-span-2 lg:col-span-6 w-full">
                 <Search className="w-4 h-4 text-chocolate-pale/60 absolute left-3 top-3" />
                 <input
                   type="text"
                   placeholder="🔎 Buscar por nome..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-cream-medium/30 border border-cream-dark rounded-xl text-chocolate placeholder-chocolate-pale/50 focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all text-xs"
+                  className="w-full pl-9 pr-4 py-2 bg-cream-medium/30 border border-cream-dark rounded-xl text-chocolate placeholder-chocolate-pale/50 focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all text-xs"
                 />
+              </div>
+
+              {/* Filtro por Curso - 3 cols on lg */}
+              <div className="sm:col-span-1 lg:col-span-3 w-full">
+                <select
+                  value={selectedCourseFilter}
+                  onChange={(e) => setSelectedCourseFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-cream-medium/30 border border-cream-dark rounded-xl text-chocolate focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all text-xs cursor-pointer appearance-none pr-7"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234A3728' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 10px center',
+                    backgroundSize: '12px'
+                  }}
+                >
+                  <option value="">Todos os cursos</option>
+                  {COURSES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro por Palhas (0 a 10) - 3 cols on lg */}
+              <div className="sm:col-span-1 lg:col-span-3 w-full">
+                <select
+                  value={selectedPalhasFilter}
+                  onChange={(e) => setSelectedPalhasFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-cream-medium/30 border border-cream-dark rounded-xl text-chocolate focus:outline-none focus:ring-2 focus:ring-chocolate/15 focus:border-chocolate transition-all text-xs cursor-pointer appearance-none pr-7"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234A3728' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 10px center',
+                    backgroundSize: '12px'
+                  }}
+                >
+                  <option value="">Todas as palhas</option>
+                  {[...Array(11).keys()].map((num) => (
+                    <option key={num} value={num.toString()}>
+                      {num} {num === 1 ? 'palha' : 'palhas'} ({num}/10)
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
