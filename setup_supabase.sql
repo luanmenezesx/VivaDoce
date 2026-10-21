@@ -125,7 +125,7 @@ BEGIN
         NEW.customer_id, 
         'purchase', 
         NEW.quantity, 
-        '+' || NEW.quantity || ' Palha' || CASE WHEN NEW.quantity > 1 THEN 'as' ELSE '' END || ' Italiana' || CASE WHEN NEW.quantity > 1 THEN 'as' ELSE '' END, 
+        '+' || NEW.quantity || ' Palha' || CASE WHEN NEW.quantity > 1 THEN 's' ELSE '' END || ' Italiana' || CASE WHEN NEW.quantity > 1 THEN 's' ELSE '' END, 
         NEW.created_by, 
         NEW.created_at, 
         NEW.id
@@ -148,7 +148,7 @@ BEGIN
         UPDATE public.loyalty_history
         SET created_at = NEW.created_at,
             quantity = NEW.quantity,
-            description = '+' || NEW.quantity || ' Palha' || CASE WHEN NEW.quantity > 1 THEN 'as' ELSE '' END || ' Italiana' || CASE WHEN NEW.quantity > 1 THEN 'as' ELSE '' END
+            description = '+' || NEW.quantity || ' Palha' || CASE WHEN NEW.quantity > 1 THEN 's' ELSE '' END || ' Italiana' || CASE WHEN NEW.quantity > 1 THEN 's' ELSE '' END
         WHERE purchase_id = NEW.id;
     END IF;
     RETURN NEW;

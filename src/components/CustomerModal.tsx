@@ -19,6 +19,13 @@ const parseDateTimeLocalToIso = (localString: string) => {
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 };
 
+const formatHistoryDescription = (desc: string) => {
+  if (!desc) return '';
+  return desc
+    .replace(/Palhaas/gi, 'Palhas')
+    .replace(/Italianaas/gi, 'Italianas');
+};
+
 interface Customer {
   id: string;
   name: string;
@@ -217,7 +224,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
     try {
       const newIso = parseDateTimeLocalToIso(editingDateValue);
       const newQuantity = Math.max(1, Math.floor(editingQuantityValue));
-      const newDesc = `+${newQuantity} Palha${newQuantity > 1 ? 'as' : ''} Italiana${newQuantity > 1 ? 'as' : ''}`;
+      const newDesc = `+${newQuantity} Palha${newQuantity > 1 ? 's' : ''} Italiana${newQuantity > 1 ? 's' : ''}`;
 
       // 1. Update purchase quantity and created_at
       const { error: purchError } = await supabase
@@ -541,7 +548,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
                             Editar compra
                           </span>
                           <span className="text-[10px] text-chocolate-pale font-medium bg-cream-light px-2 py-0.5 rounded-md border border-cream-dark/40">
-                            Atual: {item.description}
+                            Atual: {formatHistoryDescription(item.description)}
                           </span>
                         </div>
 
@@ -616,7 +623,7 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-1.5 font-bold">
                             <span className={item.type === 'redeem' ? 'text-emerald-700 font-extrabold' : 'text-chocolate'}>
-                              {item.description}
+                              {formatHistoryDescription(item.description)}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-[10px] text-chocolate-pale/80 font-medium">
