@@ -53,6 +53,10 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
   const [rewardsAvailable, setRewardsAvailable] = useState(0);
   const [totalPurchases, setTotalPurchases] = useState(0);
   
+  const [currentName, setCurrentName] = useState(customer.name);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(customer.name);
+
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
   const [purchaseDate, setPurchaseDate] = useState<string>(() => formatForDateTimeLocal());
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -114,7 +118,65 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
     loadCustomerData();
     setPurchaseDate(formatForDateTimeLocal());
     setEditingHistoryId(null);
-  }, [customer.id]);
+    setCurrentName(customer.name);
+    setEditedName(customer.name);
+    setIsEditingName(false);
+  }, [customer.id, customer.name]);
+
+  const handleUpdateCustomerName = async () => {
+    const trimmed = editedName.trim();
+    if (!trimmed || trimmed === currentName) {
+      setIsEditingName(false);
+      return;
+    }
+
+    setLoadingAction(true);
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .update({ 
+          name: trimmed,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', customer.id);
+
+      if (error) throw error;
+
+      setCurrentName(trimmed);
+      setIsEditingName(false);
+      onDataChange();
+    } catch (err) {
+      console.error('Error updating customer name:', err);
+      alert('Erro ao atualizar o nome do cliente. Tente novamente.');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    const confirmDelete = window.confirm(
+      `ATENÇÃO: Deseja realmente excluir o cliente "${currentName}"?\n\nTodas as compras, histórico e prêmios vinculados a este cliente serão apagados permanentemente.`
+    );
+    if (!confirmDelete) return;
+
+    setLoadingAction(true);
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .delete()
+        .eq('id', customer.id);
+
+      if (error) throw error;
+
+      onClose();
+      onDataChange();
+    } catch (err) {
+      console.error('Error deleting customer:', err);
+      alert('Erro ao excluir o cliente. Verifique suas permissões.');
+    } finally {
+      setLoadingAction(false);
+    }
+  };
 
   const handleIncrement = () => setPurchaseQuantity(prev => prev + 1);
   const handleDecrement = () => setPurchaseQuantity(prev => Math.max(1, prev - 1));
@@ -264,14 +326,65 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
         
         {/* Header */}
         <div className="p-6 border-b border-cream-medium flex items-start justify-between bg-cream-medium/40">
-          <div>
+          <div className="flex-1 pr-2">
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-chocolate/10 border border-chocolate/20 text-chocolate rounded-full text-[10px] font-bold mb-1">
               <User className="w-3 h-3" />
               Perfil do Cliente
             </span>
-            <h3 className="text-xl font-bold text-chocolate">{customer.name}</h3>
+            
+            {isEditingName ? (
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="text"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  placeholder="Nome do cliente"
+                  className="px-3 py-1 bg-cream-light border border-cream-dark rounded-xl text-chocolate font-bold text-sm focus:outline-none focus:ring-2 focus:ring-chocolate/20 w-full max-w-[280px]"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleUpdateCustomerName();
+                    if (e.key === 'Escape') {
+                      setIsEditingName(false);
+                      setEditedName(currentName);
+                    }
+                  }}
+                />
+                <button
+                  onClick={handleUpdateCustomerName}
+                  disabled={loadingAction || !editedName.trim()}
+                  className="p-1.5 bg-chocolate hover:bg-chocolate-light text-cream-light rounded-xl transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                  title="Salvar novo nome"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => {
+                    setIsEditingName(false);
+                    setEditedName(currentName);
+                  }}
+                  disabled={loadingAction}
+                  className="p-1.5 bg-cream-medium hover:bg-cream-dark/40 text-chocolate rounded-xl transition-all cursor-pointer"
+                  title="Cancelar"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-0.5">
+                <h3 className="text-xl font-bold text-chocolate leading-tight">{currentName}</h3>
+                <button
+                  onClick={() => setIsEditingName(true)}
+                  className="p-1 text-chocolate-pale/70 hover:text-chocolate hover:bg-cream-dark/30 rounded-lg transition-colors cursor-pointer"
+                  title="Editar nome do cliente"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <p className="text-xs text-chocolate-pale font-medium mt-0.5">{customer.course}</p>
           </div>
+
           <button 
             onClick={onClose}
             className="p-1.5 rounded-full hover:bg-cream-dark/50 text-chocolate transition-colors cursor-pointer"
@@ -550,6 +663,31 @@ export const CustomerModal: React.FC<CustomerModalProps> = ({
           </div>
 
         </div>
+
+        {/* Rodapé / Ações do Cliente */}
+        <div className="px-6 py-3.5 border-t border-cream-medium bg-cream-medium/30 flex items-center justify-between">
+          <button
+            onClick={() => {
+              setIsEditingName(true);
+              setEditedName(currentName);
+            }}
+            className="text-xs font-semibold text-chocolate hover:text-chocolate-light flex items-center gap-1.5 cursor-pointer py-1.5 px-3 rounded-xl hover:bg-cream-medium transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5 text-accent-gold" />
+            Editar nome do cliente
+          </button>
+
+          <button
+            onClick={handleDeleteCustomer}
+            disabled={loadingAction}
+            className="text-xs font-semibold text-red-700 hover:text-red-800 flex items-center gap-1.5 cursor-pointer py-1.5 px-3 rounded-xl border border-red-200 bg-red-50/50 hover:bg-red-50 active:scale-95 transition-all disabled:opacity-50"
+            title="Excluir este cliente e todas as suas compras permanentemente"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Excluir cliente
+          </button>
+        </div>
+
       </div>
     </div>
   );
