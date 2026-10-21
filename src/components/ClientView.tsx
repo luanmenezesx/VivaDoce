@@ -18,7 +18,15 @@ interface CustomerPurchase {
   quantity: number;
   description: string;
   created_at: string;
+  type: 'purchase' | 'redeem';
 }
+
+const formatHistoryDescription = (desc: string) => {
+  if (!desc) return '';
+  return desc
+    .replace(/Palhaas/gi, 'Palhas')
+    .replace(/Italianaas/gi, 'Italianas');
+};
 
 export const ClientView: React.FC = () => {
   const [name, setName] = useState('');
@@ -27,12 +35,12 @@ export const ClientView: React.FC = () => {
   const [cardData, setCardData] = useState<LoyaltyCardData | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  const [purchasesList, setPurchasesList] = useState<CustomerPurchase[]>([]);
+  const [historyList, setHistoryList] = useState<CustomerPurchase[]>([]);
   const [loadingPurchases, setLoadingPurchases] = useState(false);
 
   const loadPurchases = async (custName: string, custCourse: string, custId: string) => {
     setLoadingPurchases(true);
-    setPurchasesList([]);
+    setHistoryList([]);
     try {
       // 1. Tenta buscar pela função RPC segura (SECURITY DEFINER)
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_customer_history', {
@@ -41,8 +49,7 @@ export const ClientView: React.FC = () => {
       });
 
       if (!rpcError && rpcData && rpcData.length > 0) {
-        const purchases = rpcData.filter((item: any) => item.type === 'purchase');
-        setPurchasesList(purchases);
+        setHistoryList(rpcData as CustomerPurchase[]);
         return;
       }
 
@@ -51,11 +58,10 @@ export const ClientView: React.FC = () => {
         .from('loyalty_history')
         .select('id, quantity, description, created_at, type')
         .eq('customer_id', custId)
-        .eq('type', 'purchase')
         .order('created_at', { ascending: false });
 
       if (!directError && directData) {
-        setPurchasesList(directData);
+        setHistoryList(directData as CustomerPurchase[]);
       }
     } catch (err) {
       console.error('Error fetching purchases history for client:', err);
@@ -71,7 +77,7 @@ export const ClientView: React.FC = () => {
     setLoading(true);
     setSearchError(null);
     setCardData(null);
-    setPurchasesList([]);
+    setHistoryList([]);
 
     try {
       const { data, error } = await supabase.rpc('search_customer_loyalty', {
@@ -321,26 +327,59 @@ export const ClientView: React.FC = () => {
               </div>
             )}
 
-            {/* Quick breakdown stats */}
-            <div className="border-t border-cream-medium pt-4 grid grid-cols-2 gap-4 text-center text-xs">
-              <div className="bg-cream-medium/20 p-2.5 rounded-xl border border-cream-dark/30">
-                <p className="text-chocolate-pale font-medium">Palhas neste ciclo</p>
-                <p className="text-base font-extrabold text-chocolate">{cardData.purchases_this_cycle}</p>
+            {/* Aviso de Prêmios já resgatados */}
+            {historyList.some(i => i.type === 'redeem') && (
+              <div className="bg-emerald-50 border border-emerald-300 text-emerald-950 p-3 rounded-2xl flex items-center gap-3 shadow-xs">
+                <div className="w-9 h-9 bg-emerald-100 border border-emerald-300 rounded-xl flex items-center justify-center text-lg shrink-0">
+                  🎁
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-emerald-900 leading-tight">
+                    {historyList.filter(i => i.type === 'redeem').reduce((s, i) => s + (i.quantity || 1), 0)} Prêmio resgatado!
+                  </p>
+                  <p className="text-[10px] text-emerald-700/80 mt-0.5">
+                    Parabéns! Você já completou seu cartão fidelidade e retirou sua Palha Italiana grátis.
+                  </p>
+                </div>
               </div>
-              <div className="bg-cream-medium/20 p-2.5 rounded-xl border border-cream-dark/30">
-                <p className="text-chocolate-pale font-medium">Prêmios disponíveis</p>
-                <p className={`text-base font-extrabold ${cardData.rewards_available > 0 ? 'text-emerald-700' : 'text-chocolate'}`}>
-                  {cardData.rewards_available}
-                </p>
-              </div>
-            </div>
+            )}
 
-            {/* Histórico de Compras (Somente Leitura) */}
+            {/* Quick breakdown stats */}
+            {(() => {
+              const redeemedCount = historyList
+                .filter(i => i.type === 'redeem')
+                .reduce((s, i) => s + (i.quantity || 1), 0);
+
+              return (
+                <div className={`border-t border-cream-medium pt-4 grid ${redeemedCount > 0 ? 'grid-cols-3' : 'grid-cols-2'} gap-2.5 text-center text-xs`}>
+                  <div className="bg-cream-medium/20 p-2.5 rounded-xl border border-cream-dark/30">
+                    <p className="text-chocolate-pale font-medium text-[10px] uppercase tracking-wider">Ciclo Atual</p>
+                    <p className="text-base font-extrabold text-chocolate">{cardData.purchases_this_cycle}/10</p>
+                  </div>
+                  <div className="bg-cream-medium/20 p-2.5 rounded-xl border border-cream-dark/30">
+                    <p className="text-chocolate-pale font-medium text-[10px] uppercase tracking-wider">Prêmios Disp.</p>
+                    <p className={`text-base font-extrabold ${cardData.rewards_available > 0 ? 'text-emerald-700 animate-pulse' : 'text-chocolate'}`}>
+                      {cardData.rewards_available}
+                    </p>
+                  </div>
+                  {redeemedCount > 0 && (
+                    <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200">
+                      <p className="text-emerald-800 font-medium text-[10px] uppercase tracking-wider">Resgatados</p>
+                      <p className="text-base font-extrabold text-emerald-900">
+                        {redeemedCount} 🎁
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Histórico de Compras e Prêmios (Somente Leitura) */}
             <div className="border-t border-cream-medium pt-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-chocolate uppercase tracking-wider flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-accent-gold" />
-                  Compras registradas
+                  Compras e prêmios
                 </h3>
                 <span className="text-[10px] text-chocolate-pale font-medium bg-cream-medium/50 px-2 py-0.5 rounded-full border border-cream-dark/40">
                   Somente leitura
@@ -352,19 +391,19 @@ export const ClientView: React.FC = () => {
                   <div className="w-4 h-4 border-2 border-chocolate border-t-transparent rounded-full animate-spin" />
                   Carregando compras...
                 </div>
-              ) : purchasesList.length === 0 ? (
+              ) : historyList.length === 0 ? (
                 <div className="p-4 bg-cream-medium/20 border border-dashed border-cream-dark/40 rounded-xl text-center text-xs text-chocolate-pale">
                   Nenhuma compra encontrada no histórico.
                 </div>
               ) : (
-                <div className="divide-y divide-cream-medium/70 border border-cream-dark/40 rounded-2xl bg-cream-medium/10 overflow-hidden max-h-[220px] overflow-y-auto no-scrollbar">
-                  {purchasesList.map((item) => (
+                <div className="divide-y divide-cream-medium/70 border border-cream-dark/40 rounded-2xl bg-cream-medium/10 overflow-hidden max-h-[240px] overflow-y-auto no-scrollbar">
+                  {historyList.map((item) => (
                     <div key={item.id} className="p-3 flex items-center justify-between text-xs hover:bg-cream-medium/20 transition-colors">
                       <div className="flex items-center gap-2.5">
-                        <span className="text-lg">🍫</span>
+                        <span className="text-lg">{item.type === 'redeem' ? '🎁' : '🍫'}</span>
                         <div>
-                          <p className="font-bold text-chocolate leading-tight">
-                            +{item.quantity} {item.quantity === 1 ? 'Palha Italiana' : 'Palhas Italianas'}
+                          <p className={`font-bold leading-tight ${item.type === 'redeem' ? 'text-emerald-800 font-extrabold' : 'text-chocolate'}`}>
+                            {item.type === 'redeem' ? '🎁 Prêmio resgatado (Palha Grátis)' : formatHistoryDescription(item.description)}
                           </p>
                           <p className="text-[10px] text-chocolate-pale flex items-center gap-1 mt-0.5 font-medium">
                             <Calendar className="w-2.5 h-2.5" />
@@ -372,8 +411,12 @@ export const ClientView: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs font-black text-chocolate bg-cream-light px-2.5 py-1 rounded-lg border border-cream-dark/40 shadow-2xs">
-                        +{item.quantity}
+                      <span className={`text-xs font-black px-2.5 py-1 rounded-lg border shadow-2xs shrink-0 ${
+                        item.type === 'redeem' 
+                          ? 'text-emerald-800 bg-emerald-100 border-emerald-300' 
+                          : 'text-chocolate bg-cream-light border-cream-dark/40'
+                      }`}>
+                        {item.type === 'redeem' ? 'Resgatado' : `+${item.quantity}`}
                       </span>
                     </div>
                   ))}
@@ -387,7 +430,7 @@ export const ClientView: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setCardData(null);
-                  setPurchasesList([]);
+                  setHistoryList([]);
                   setName('');
                   setCourse('');
                 }}
