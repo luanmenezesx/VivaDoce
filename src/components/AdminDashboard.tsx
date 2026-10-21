@@ -4,7 +4,7 @@ import { COURSES } from '../utils/courses';
 import { CustomerModal } from './CustomerModal';
 import { 
   Users, Candy, Gift, Plus, Search, 
-  ChevronRight, Sparkles, CheckCircle
+  ChevronRight, Sparkles, CheckCircle, Copy, Check
 } from 'lucide-react';
 
 interface Customer {
@@ -31,6 +31,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourseFilter, setSelectedCourseFilter] = useState('');
   const [selectedPalhasFilter, setSelectedPalhasFilter] = useState('');
+  const [copiedNames, setCopiedNames] = useState(false);
   
   // Registration Form
   const [newName, setNewName] = useState('');
@@ -40,6 +41,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
 
   // Selected Customer Modal
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  const handleCopyNames = () => {
+    const sortedNames = [...customers]
+      .map(c => c.name.trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    
+    if (sortedNames.length === 0) return;
+    navigator.clipboard.writeText(sortedNames.join('\n'));
+    setCopiedNames(true);
+    setTimeout(() => setCopiedNames(false), 2500);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -334,14 +347,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminEmail }) =>
         <div className="lg:col-span-2 order-1 lg:order-2 space-y-4 bg-cream-light border border-cream-dark rounded-2xl p-6 shadow-sm overflow-hidden">
           
           <div className="border-b border-cream-medium pb-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-chocolate uppercase tracking-wider flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+              <h3 className="text-sm font-bold text-chocolate uppercase tracking-wider flex items-center gap-1.5 shrink-0">
                 <Users className="w-4 h-4 text-chocolate" />
                 Lista de Clientes
               </h3>
-              <span className="text-[11px] text-chocolate-pale font-medium bg-cream-medium/50 px-2.5 py-0.5 rounded-full border border-cream-dark/50">
-                {filteredCustomers.length} {filteredCustomers.length === 1 ? 'cliente' : 'clientes'}
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyNames}
+                  className="px-2.5 py-1 bg-cream-medium/70 hover:bg-cream-dark/40 text-chocolate text-[11px] font-semibold rounded-lg border border-cream-dark/60 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                  title="Copiar lista de nomes de todos os clientes em ordem alfabética"
+                >
+                  {copiedNames ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-700" />
+                      <span className="text-emerald-800 font-bold">Nomes copiados!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-accent-gold" />
+                      <span>Copiar nomes (A-Z)</span>
+                    </>
+                  )}
+                </button>
+                <span className="text-[11px] text-chocolate-pale font-medium bg-cream-medium/50 px-2.5 py-0.5 rounded-full border border-cream-dark/50 shrink-0">
+                  {filteredCustomers.length} {filteredCustomers.length === 1 ? 'cliente' : 'clientes'}
+                </span>
+              </div>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 w-full">
